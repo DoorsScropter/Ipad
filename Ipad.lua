@@ -1,4 +1,4 @@
--- 3D iPad v3 | Delta compatible (client-side LocalScript)
+-- 3D iPad v4 | Delta compatible (client-side LocalScript)
 -- Everything is a real Part in Workspace. The screen is a Part with a SurfaceGui,
 -- so when the iPad tilts, the screen tilts with it.
 --
@@ -22,8 +22,8 @@ local old = Workspace:FindFirstChild("IPad3D_Swipe")
 if old then old:Destroy() end
 
 -- ===== SETTINGS =====
-local K = 0.75                 -- overall size (smaller so it covers less of the screen)
-local DIST = 2.15               -- distance from camera
+local K = 0.8                  -- overall size
+local DIST = 2.4               -- distance from camera
 local PUSH = 0.08              -- tap push-back force (studs), lower = softer
 local MAX_TILT = math.rad(35)  -- max sideways tilt
 local TILT_SPEED = 0.3         -- degrees of tilt per pixel dragged
@@ -101,10 +101,44 @@ part(
 	Enum.PartType.Cylinder
 )
 
--- ===== SIDE BUTTONS =====
-part("PowerButton", Vector3.new(0.4 * K, 0.04 * K, 0.06 * K), CFrame.new(BW / 2 - 0.6 * K, BH / 2 + 0.02 * K, 0), silver, metal)
-part("VolUp", Vector3.new(0.04 * K, 0.3 * K, 0.06 * K), CFrame.new(BW / 2 + 0.02 * K, BH / 2 - 0.8 * K, 0), silver, metal)
-part("VolDown", Vector3.new(0.04 * K, 0.3 * K, 0.06 * K), CFrame.new(BW / 2 + 0.02 * K, BH / 2 - 1.2 * K, 0), silver, metal)
+-- ===== SIDE BUTTONS (realistic pill shapes, og iPad style) =====
+local BTN_COLOR   = Color3.fromRGB(180, 182, 190)
+local BTN_MAT     = Enum.Material.Metal
+local BTN_PROTRUDE = 0.045 * K   -- how far the button sticks out from the body
+local BTN_WIDTH    = 0.052 * K   -- the "thickness" of the pill (rounded cap diameter)
+
+-- Power button: top edge, offset toward the right (horizontal pill)
+local PWR_LEN    = 0.34 * K
+local pwrBodyW   = PWR_LEN - BTN_WIDTH
+local pwrX       = BW / 2 - 0.55 * K
+local pwrY       = BH / 2 + BTN_PROTRUDE / 2
+part("PowerButtonBody", Vector3.new(pwrBodyW, BTN_PROTRUDE, BTN_WIDTH),
+	CFrame.new(pwrX, pwrY, 0), BTN_COLOR, BTN_MAT)
+for _, sx in ipairs({ -1, 1 }) do
+	part("PowerButtonCap" .. (sx > 0 and "R" or "L"),
+		Vector3.new(BTN_PROTRUDE, BTN_WIDTH, BTN_WIDTH),
+		CFrame.new(pwrX + sx * pwrBodyW / 2, pwrY, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		BTN_COLOR, BTN_MAT, Enum.PartType.Cylinder)
+end
+
+-- Volume buttons + mute switch: right edge (vertical pills)
+local volX = BW / 2 + BTN_PROTRUDE / 2
+
+local function makeVerticalPill(name, centerY, totalLen)
+	local bodyH = totalLen - BTN_WIDTH
+	part(name .. "Body", Vector3.new(BTN_PROTRUDE, bodyH, BTN_WIDTH),
+		CFrame.new(volX, centerY, 0), BTN_COLOR, BTN_MAT)
+	for _, sy in ipairs({ -1, 1 }) do
+		part(name .. "Cap" .. (sy > 0 and "T" or "B"),
+			Vector3.new(BTN_PROTRUDE, BTN_WIDTH, BTN_WIDTH),
+			CFrame.new(volX, centerY + sy * bodyH / 2, 0),
+			BTN_COLOR, BTN_MAT, Enum.PartType.Cylinder)
+	end
+end
+
+makeVerticalPill("MuteSwitch", BH / 2 - 0.42 * K, 0.14 * K)
+makeVerticalPill("VolUp",      BH / 2 - 0.72 * K, 0.26 * K)
+makeVerticalPill("VolDown",    BH / 2 - 1.06 * K, 0.26 * K)
 
 -- ===== SCREEN PART =====
 local screen = part("Screen", Vector3.new(SW, SH, E), CFrame.new(0, 0, FZ + 1.5 * E + E / 2), Color3.fromRGB(0, 0, 0))
@@ -368,150 +402,6 @@ local iconHit = ui("Frame", {
 	ZIndex = 2,
 }, home)
 
-
--- ===== APP STORE + TOP EXIT CONTROL =====
--- All apps below are simulated inside this virtual tablet. A LocalScript cannot
--- install native apps on the device or grant server-side Roblox inventory items.
-local storeRoot = ui("Frame", {
-	Name = "AppStoreWindow",
-	Size = UDim2.fromScale(1, 1),
-	BackgroundColor3 = Color3.fromRGB(245, 246, 250),
-	BorderSizePixel = 0,
-	Visible = false,
-	ZIndex = 40,
-}, sg)
-
-local storeTop = ui("Frame", {
-	Size = UDim2.new(1, 0, 0, 90),
-	BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-	BorderSizePixel = 0,
-	ZIndex = 41,
-}, storeRoot)
-label(storeTop, "App Store", 24, 18, 300, 52, 34, Color3.fromRGB(25, 25, 30), Enum.Font.GothamBold, Enum.TextXAlignment.Left, 42)
-local storeClose = ui("TextButton", {
-	Size = UDim2.fromOffset(54, 54),
-	Position = UDim2.new(1, -70, 0, 16),
-	BackgroundColor3 = Color3.fromRGB(242, 243, 247),
-	BorderSizePixel = 0,
-	Text = "Done",
-	TextSize = 18,
-	TextColor3 = Color3.fromRGB(0, 122, 255),
-	Font = Enum.Font.GothamMedium,
-	AutoButtonColor = false,
-	ZIndex = 43,
-}, storeTop)
-corner(storeClose, UDim.new(1, 0))
-
-local storeSearch = ui("TextBox", {
-	Name = "StoreSearch",
-	Size = UDim2.new(1, -48, 0, 42),
-	Position = UDim2.fromOffset(24, 96),
-	BackgroundColor3 = Color3.fromRGB(230, 232, 238),
-	BorderSizePixel = 0,
-	PlaceholderText = "Search",
-	PlaceholderColor3 = Color3.fromRGB(115, 118, 130),
-	Text = "",
-	TextColor3 = Color3.fromRGB(30, 30, 35),
-	TextSize = 18,
-	Font = Enum.Font.Gotham,
-	ClearTextOnFocus = false,
-	ZIndex = 43,
-}, storeRoot)
-corner(storeSearch, UDim.new(0, 13))
-local storeHint = label(storeRoot, "Connect to Wi-Fi to download apps.", 24, 142, CW - 48, 30, 15, Color3.fromRGB(90, 92, 105), Enum.Font.GothamMedium, Enum.TextXAlignment.Left, 42)
-local installedLabel = label(storeRoot, "Installed: none", 24, CH - 56, CW - 48, 30, 17, Color3.fromRGB(80, 82, 95), Enum.Font.GothamMedium, Enum.TextXAlignment.Left, 42)
-
-local installedApps = {}
-local appButtons = {}
-local function makeStoreApp(name, description, y, iconText, color)
-	local card = ui("Frame", {
-		Size = UDim2.new(1, -40, 0, 142),
-		Position = UDim2.fromOffset(20, y),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		BorderSizePixel = 0,
-		ZIndex = 41,
-	}, storeRoot)
-	corner(card, UDim.new(0, 22))
-	local appIcon = ui("Frame", {
-		Size = UDim2.fromOffset(86, 86),
-		Position = UDim2.fromOffset(18, 26),
-		BackgroundColor3 = color,
-		BorderSizePixel = 0,
-		ZIndex = 42,
-	}, card)
-	corner(appIcon, UDim.new(0, 20))
-	label(appIcon, iconText, 0, 0, 86, 86, 28, WHITE, Enum.Font.GothamBold, nil, 43)
-	label(card, name, 122, 20, 240, 34, 22, Color3.fromRGB(25, 25, 30), Enum.Font.GothamBold, Enum.TextXAlignment.Left, 43)
-	label(card, description, 122, 55, 245, 48, 15, Color3.fromRGB(90, 92, 105), Enum.Font.GothamMedium, Enum.TextXAlignment.Left, 43)
-	local action = ui("TextButton", {
-		Size = UDim2.fromOffset(112, 42),
-		Position = UDim2.new(1, -130, 0.5, -21),
-		BackgroundColor3 = BLUE,
-		BorderSizePixel = 0,
-		Text = "GET",
-		TextColor3 = WHITE,
-		TextSize = 17,
-		Font = Enum.Font.GothamBold,
-		AutoButtonColor = false,
-		ZIndex = 43,
-	}, card)
-	corner(action, UDim.new(1, 0))
-	appButtons[name] = {button = action, card = card}
-	return action
-end
-
-local robloxButton = makeStoreApp("Roblox", "Explore experiences (simulated app)", 184, "R", Color3.fromRGB(25, 25, 30))
-local flappyButton = makeStoreApp("Flappy Bird", "A tiny arcade game (simulated app)", 342, "FB", Color3.fromRGB(65, 190, 95))
-
-local appScreen = ui("Frame", {
-	Name = "SimulatedAppScreen",
-	Size = UDim2.fromScale(1, 1),
-	BackgroundColor3 = Color3.fromRGB(20, 24, 35),
-	BorderSizePixel = 0,
-	Visible = false,
-	ZIndex = 60,
-}, sg)
-local appScreenTitle = label(appScreen, "", 20, 90, CW - 40, 64, 34, WHITE, Enum.Font.GothamBold, nil, 61)
-local appScreenMessage = label(appScreen, "", 36, 190, CW - 72, 300, 24, WHITE, Enum.Font.GothamMedium, nil, 61)
-local appScreenBack = ui("TextButton", {
-	Size = UDim2.fromOffset(130, 52),
-	Position = UDim2.fromOffset(20, 20),
-	BackgroundColor3 = Color3.fromRGB(60, 65, 80),
-	BorderSizePixel = 0,
-	Text = "‹ Store",
-	TextColor3 = WHITE,
-	TextSize = 20,
-	Font = Enum.Font.GothamBold,
-	AutoButtonColor = false,
-	ZIndex = 62,
-}, appScreen)
-corner(appScreenBack, UDim.new(0, 18))
-
--- iPad-style home indicator. When an app is open, tapping this bottom area
--- exits the app to the home screen. The hit target is intentionally larger
--- than the visible white bar for easier mobile tapping.
-local homeIndicator = ui("Frame", {
-	Name = "AppHomeIndicator",
-	Size = UDim2.fromOffset(176, 7),
-	Position = UDim2.fromOffset(CW / 2 - 88, CH - 30),
-	BackgroundColor3 = WHITE,
-	BackgroundTransparency = 0.15,
-	BorderSizePixel = 0,
-	Visible = false,
-	ZIndex = 120,
-}, sg)
-corner(homeIndicator, UDim.new(1, 0))
-
-local homeIndicatorHit = ui("Frame", {
-	Name = "AppHomeIndicatorHit",
-	Size = UDim2.fromOffset(300, 84),
-	Position = UDim2.fromOffset(CW / 2 - 150, CH - 82),
-	BackgroundTransparency = 1,
-	BorderSizePixel = 0,
-	Visible = false,
-	ZIndex = 121,
-}, sg)
-
 local function pressIcon(on)
 	TweenService:Create(
 		iconScale,
@@ -590,16 +480,16 @@ local status = ui("Frame", {
 local dndLabel = label(status, "Do Not Disturb", 30, 14, 260, 28, 20, WHITE, Enum.Font.GothamMedium, Enum.TextXAlignment.Left, 21)
 dndLabel.Visible = false
 
-local statusWifi = drawWifi(status, CW - 174, 37, 0.48, WHITE, 21)
+local statusWifi = drawWifi(status, CW - 192, 37, 0.55, WHITE, 21)
 for _, p in ipairs(statusWifi) do
 	p.BackgroundTransparency = 0.7 -- dim until connected
 end
 
-local pctLabel = label(status, "100%", CW - 145, 14, 58, 28, 22, WHITE, Enum.Font.GothamMedium, Enum.TextXAlignment.Right, 21)
+local pctLabel = label(status, "100%", CW - 160, 14, 70, 28, 22, WHITE, Enum.Font.GothamMedium, Enum.TextXAlignment.Right, 21)
 
 local battOutline = ui("Frame", {
 	Size = UDim2.fromOffset(52, 26),
-	Position = UDim2.fromOffset(CW - 76, 15),
+	Position = UDim2.fromOffset(CW - 80, 15),
 	BackgroundTransparency = 1,
 	BorderSizePixel = 0,
 	ZIndex = 21,
@@ -609,7 +499,7 @@ ui("UIStroke", { Color = WHITE, Thickness = 2.5, Transparency = 0.2 }, battOutli
 
 local battFill = ui("Frame", {
 	Size = UDim2.fromOffset(44, 18),
-	Position = UDim2.fromOffset(CW - 76 + 4, 15 + 4),
+	Position = UDim2.fromOffset(CW - 80 + 4, 15 + 4),
 	BackgroundColor3 = WHITE,
 	BorderSizePixel = 0,
 	ZIndex = 22,
@@ -618,7 +508,7 @@ corner(battFill, UDim.new(0, 5))
 
 local battNub = ui("Frame", {
 	Size = UDim2.fromOffset(4, 11),
-	Position = UDim2.fromOffset(CW - 23, 22),
+	Position = UDim2.fromOffset(CW - 27, 22),
 	BackgroundColor3 = WHITE,
 	BackgroundTransparency = 0.2,
 	BorderSizePixel = 0,
@@ -987,9 +877,6 @@ local function refreshWifi()
 	for _, p in ipairs(statusWifi) do
 		p.BackgroundTransparency = wifiState == "connected" and 0 or 0.7
 	end
-	if storeRoot then
-		storeHint.Text = wifiState == "connected" and ("Connected to " .. WIFI_NAME .. " — downloads available.") or "Connect to Wi-Fi to download apps."
-	end
 end
 
 local wifiToken = 0
@@ -1082,119 +969,9 @@ addTarget(netRow, "tap", function()
 	return ccActiveWifi() and wifiOn and wifiState ~= "scanning"
 end, tapNetwork)
 
-local function updateHomeIndicator()
-	local appOpen = storeRoot.Visible or appScreen.Visible
-	homeIndicator.Visible = appOpen
-	homeIndicatorHit.Visible = appOpen
-end
-
-local function returnToHome()
-	storeRoot.Visible = false
-	appScreen.Visible = false
-	ccTarget, ccP, ccDragging = 0, 0, false
-	updateHomeIndicator()
-end
-
 addTarget(iconHit, "tap", function()
-	return not locked and ccTarget == 0 and ccP < 0.05 and not dead and not storeRoot.Visible and not appScreen.Visible
-end, function()
-	storeRoot.Visible = true
-	appScreen.Visible = false
-	storeHint.Text = wifiState == "connected" and "Connected to " .. WIFI_NAME or "Connect to Wi-Fi to download apps."
-	updateHomeIndicator()
-end, pressIcon)
-
-local function refreshStore()
-	installedLabel.Text = "Installed: " .. (#(function()
-		local names = {}
-		for name in pairs(installedApps) do table.insert(names, name) end
-		table.sort(names)
-		return names
-	end)() > 0 and table.concat((function()
-		local names = {}
-		for name in pairs(installedApps) do table.insert(names, name) end
-		table.sort(names)
-		return names
-	end)(), ", ") or "none")
-	storeHint.Text = wifiState == "connected" and ("Connected to " .. WIFI_NAME .. " — downloads available.") or "Connect to Wi-Fi to download apps."
-	for name, item in pairs(appButtons) do
-		item.button.Text = installedApps[name] and "OPEN" or "GET"
-		item.button.BackgroundColor3 = installedApps[name] and GREEN or BLUE
-	end
-end
-
-local function downloadApp(name)
-	if installedApps[name] then
-		storeRoot.Visible = false
-		appScreen.Visible = true
-		updateHomeIndicator()
-		appScreenTitle.Text = name
-		appScreenMessage.Text = name == "Flappy Bird"
-			and "Flappy Bird demo\\n\\nTap the screen to flap. This is a local UI demo, not the original game."
-			or "Roblox demo\\n\\nThis simulated app cannot sign in, join experiences, or install the real Roblox app."
-		return
-	end
-	if wifiState ~= "connected" then
-		storeHint.Text = "Download blocked — turn Wi-Fi on and connect to " .. WIFI_NAME .. "."
-		return
-	end
-	local item = appButtons[name]
-	if not item then return end
-	item.button.Text = "..."
-	item.button.Active = false
-	task.delay(1.5, function()
-		if not model.Parent then return end
-		installedApps[name] = true
-		item.button.Active = true
-		refreshStore()
-	end)
-end
-
-robloxButton.Activated:Connect(function() downloadApp("Roblox") end)
-flappyButton.Activated:Connect(function() downloadApp("Flappy Bird") end)
-
--- Explicit ray-hit targets for controls inside the 3D SurfaceGui.
--- SurfaceGui TextButton.Activated alone can be unreliable for some mobile executor setups.
-addTarget(storeClose, "tap", function()
-	return storeRoot.Visible and not appScreen.Visible and not dead
-end, function()
-	returnToHome()
-end)
-
-addTarget(homeIndicatorHit, "tap", function()
-	return (storeRoot.Visible or appScreen.Visible) and not dead
-end, function()
-	returnToHome()
-end)
-
-addTarget(appScreenBack, "tap", function()
-	return appScreen.Visible and not dead
-end, function()
-	appScreen.Visible = false
-	storeRoot.Visible = true
-	refreshStore()
-	updateHomeIndicator()
-end)
-
-addTarget(robloxButton, "tap", function()
-	return storeRoot.Visible and not appScreen.Visible and not dead
-end, function()
-	downloadApp("Roblox")
-end)
-
-addTarget(flappyButton, "tap", function()
-	return storeRoot.Visible and not appScreen.Visible and not dead
-end, function()
-	downloadApp("Flappy Bird")
-end)
-
-storeClose.Activated:Connect(function() returnToHome() end)
-appScreenBack.Activated:Connect(function()
-	appScreen.Visible = false
-	storeRoot.Visible = true
-	refreshStore()
-	updateHomeIndicator()
-end)
+	return not locked and ccTarget == 0 and ccP < 0.05 and not dead
+end, nil, pressIcon) -- App Store only reacts for now, nothing opens yet
 
 -- ===== SPRING (tap push-back) =====
 local sPush = { p = 0, v = 0, t = 0 }
@@ -1214,31 +991,6 @@ end
 -- ===== PLACE IN FRONT OF CAMERA (with sideways tilt) =====
 model.PrimaryPart = body
 model.Parent = Workspace
-
-local reopenGui = Instance.new("ScreenGui")
-reopenGui.Name = "VirtualIPadReopen"
-reopenGui.ResetOnSpawn = false
-reopenGui.IgnoreGuiInset = true
-local reopenButton = Instance.new("TextButton")
-reopenButton.Name = "OpenIPad"
-reopenButton.Size = UDim2.fromOffset(132, 48)
-reopenButton.Position = UDim2.new(1, -146, 1, -68)
-reopenButton.BackgroundColor3 = Color3.fromRGB(35, 38, 48)
-reopenButton.TextColor3 = WHITE
-reopenButton.Text = "Open iPad"
-reopenButton.TextSize = 17
-reopenButton.Font = Enum.Font.GothamBold
-reopenButton.Visible = false
-reopenButton.Parent = reopenGui
-local reopenCorner = Instance.new("UICorner")
-reopenCorner.CornerRadius = UDim.new(0, 14)
-reopenCorner.Parent = reopenButton
-reopenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-reopenButton.Activated:Connect(function()
-	model.Parent = Workspace
-	reopenButton.Visible = false
-end)
--- Update visibility without another perpetual loop.
 
 local conns = {}
 local tgtTilt, curTilt = 0, 0
@@ -1345,7 +1097,7 @@ local function snapBack()
 	slideTween:Play()
 end
 
-local function handleInputBegan(input)
+conns[#conns + 1] = UIS.InputBegan:Connect(function(input)
 	if mode then return end
 	local ut = input.UserInputType
 	if ut ~= Enum.UserInputType.Touch and ut ~= Enum.UserInputType.MouseButton1 then return end
@@ -1362,31 +1114,6 @@ local function handleInputBegan(input)
 	freezeCamera()
 
 	if not onScreen then
-		-- Physical top/power button: hide the whole iPad, then use Open iPad to restore it.
-		local nearTopPowerButton =
-			lp.Y > SH / 2 and lp.Y < BH / 2 + TILT_MARGIN
-			and lp.X > (BW / 2 - 1.0 * K) and lp.X < (BW / 2 - 0.2 * K)
-		if nearTopPowerButton then
-			model.Parent = nil
-			reopenButton.Visible = true
-			returnToHome()
-			mode = nil
-			restoreCamera()
-			return
-		end
-
-		-- Touching the right edge near the physical volume buttons changes volume.
-		local nearRightEdge = lp.X > SW / 2 and lp.X < BW / 2 + TILT_MARGIN
-		if nearRightEdge and math.abs(lp.Y) < BH / 2 then
-			local yFromTop = BH / 2 - lp.Y
-			if yFromTop > 0.55 * K and yFromTop < 1.05 * K then
-				setVolume(volV + 0.1)
-				return
-			elseif yFromTop >= 1.05 * K and yFromTop < 1.55 * K then
-				setVolume(volV - 0.1)
-				return
-			end
-		end
 		-- sideways tilt (frame / just outside it)
 		mode = "tilt"
 		tiltStartX = input.Position.X
@@ -1433,20 +1160,6 @@ local function handleInputBegan(input)
 		lastDy = 0
 		if slideTween then slideTween:Cancel() end
 	else
-		-- A broad bottom swipe/tap region acts like the iPad home indicator while
-		-- the App Store or a simulated app is open.
-		if (storeRoot.Visible or appScreen.Visible) and cy >= CH - 82 and math.abs(cx - CW / 2) <= 150 then
-			curTarget = nil
-			mode = "cctap"
-			curTarget = {
-				obj = homeIndicatorHit,
-				kind = "tap",
-				fn = returnToHome,
-				active = function() return (storeRoot.Visible or appScreen.Visible) and not dead end,
-			}
-			return
-		end
-
 		local tgt = findTarget(cx, cy)
 		if tgt then
 			curTarget = tgt
@@ -1455,14 +1168,6 @@ local function handleInputBegan(input)
 		else
 			mode = "tap"
 		end
-	end
-end
-conns[#conns + 1] = UIS.TouchStarted:Connect(function(input)
-	handleInputBegan(input)
-end)
-conns[#conns + 1] = UIS.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		handleInputBegan(input)
 	end
 end)
 
@@ -1498,7 +1203,7 @@ conns[#conns + 1] = UIS.InputChanged:Connect(function(input)
 	end
 end)
 
-local function handleInputEnded(input)
+conns[#conns + 1] = UIS.InputEnded:Connect(function(input)
 	if not mode then return end
 	if input.UserInputType ~= dragType then return end
 
@@ -1549,14 +1254,6 @@ local function handleInputEnded(input)
 			end
 			lastTiltTap = now
 		end
-	end
-end
-conns[#conns + 1] = UIS.TouchEnded:Connect(function(input)
-	handleInputEnded(input)
-end)
-conns[#conns + 1] = UIS.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		handleInputEnded(input)
 	end
 end)
 
