@@ -391,18 +391,34 @@ label(storeTop, "App Store", 24, 18, 300, 52, 34, Color3.fromRGB(25, 25, 30), En
 local storeClose = ui("TextButton", {
 	Size = UDim2.fromOffset(54, 54),
 	Position = UDim2.new(1, -70, 0, 16),
-	BackgroundColor3 = Color3.fromRGB(225, 227, 233),
+	BackgroundColor3 = Color3.fromRGB(242, 243, 247),
 	BorderSizePixel = 0,
-	Text = "×",
-	TextSize = 38,
-	TextColor3 = Color3.fromRGB(30, 30, 35),
+	Text = "Done",
+	TextSize = 18,
+	TextColor3 = Color3.fromRGB(0, 122, 255),
 	Font = Enum.Font.GothamMedium,
 	AutoButtonColor = false,
 	ZIndex = 43,
 }, storeTop)
 corner(storeClose, UDim.new(1, 0))
 
-local storeHint = label(storeRoot, "Connect to Wi-Fi to download apps.", 24, 100, CW - 48, 36, 18, Color3.fromRGB(90, 92, 105), Enum.Font.GothamMedium, Enum.TextXAlignment.Left, 42)
+local storeSearch = ui("TextBox", {
+	Name = "StoreSearch",
+	Size = UDim2.new(1, -48, 0, 42),
+	Position = UDim2.fromOffset(24, 96),
+	BackgroundColor3 = Color3.fromRGB(230, 232, 238),
+	BorderSizePixel = 0,
+	PlaceholderText = "Search",
+	PlaceholderColor3 = Color3.fromRGB(115, 118, 130),
+	Text = "",
+	TextColor3 = Color3.fromRGB(30, 30, 35),
+	TextSize = 18,
+	Font = Enum.Font.Gotham,
+	ClearTextOnFocus = false,
+	ZIndex = 43,
+}, storeRoot)
+corner(storeSearch, UDim.new(0, 13))
+local storeHint = label(storeRoot, "Connect to Wi-Fi to download apps.", 24, 142, CW - 48, 30, 15, Color3.fromRGB(90, 92, 105), Enum.Font.GothamMedium, Enum.TextXAlignment.Left, 42)
 local installedLabel = label(storeRoot, "Installed: none", 24, CH - 56, CW - 48, 30, 17, Color3.fromRGB(80, 82, 95), Enum.Font.GothamMedium, Enum.TextXAlignment.Left, 42)
 
 local installedApps = {}
@@ -444,8 +460,8 @@ local function makeStoreApp(name, description, y, iconText, color)
 	return action
 end
 
-local robloxButton = makeStoreApp("Roblox", "Explore experiences (simulated app)", 150, "R", Color3.fromRGB(25, 25, 30))
-local flappyButton = makeStoreApp("Flappy Bird", "A tiny arcade game (simulated app)", 308, "FB", Color3.fromRGB(65, 190, 95))
+local robloxButton = makeStoreApp("Roblox", "Explore experiences (simulated app)", 184, "R", Color3.fromRGB(25, 25, 30))
+local flappyButton = makeStoreApp("Flappy Bird", "A tiny arcade game (simulated app)", 342, "FB", Color3.fromRGB(65, 190, 95))
 
 local appScreen = ui("Frame", {
 	Name = "SimulatedAppScreen",
@@ -479,9 +495,9 @@ local tabletClose = ui("TextButton", {
 	BackgroundColor3 = Color3.fromRGB(20, 20, 26),
 	BackgroundTransparency = 0.18,
 	BorderSizePixel = 0,
-	Text = "×",
+	Text = "⏻",
 	TextColor3 = WHITE,
-	TextSize = 30,
+	TextSize = 25,
 	Font = Enum.Font.GothamBold,
 	AutoButtonColor = false,
 	ZIndex = 110,
@@ -1112,6 +1128,46 @@ end
 
 robloxButton.Activated:Connect(function() downloadApp("Roblox") end)
 flappyButton.Activated:Connect(function() downloadApp("Flappy Bird") end)
+
+-- Explicit ray-hit targets for controls inside the 3D SurfaceGui.
+-- SurfaceGui TextButton.Activated alone can be unreliable for some mobile executor setups.
+addTarget(storeClose, "tap", function()
+	return storeRoot.Visible and not appScreen.Visible and not dead
+end, function()
+	storeRoot.Visible = false
+end)
+
+addTarget(tabletClose, "tap", function()
+	return not dead
+end, function()
+	model.Parent = nil
+	reopenButton.Visible = true
+	storeRoot.Visible = false
+	appScreen.Visible = false
+	ccTarget, ccP, ccDragging = 0, 0, false
+	if mode then mode = nil restoreCamera() end
+end)
+
+addTarget(appScreenBack, "tap", function()
+	return appScreen.Visible and not dead
+end, function()
+	appScreen.Visible = false
+	storeRoot.Visible = true
+	refreshStore()
+end)
+
+addTarget(robloxButton, "tap", function()
+	return storeRoot.Visible and not appScreen.Visible and not dead
+end, function()
+	downloadApp("Roblox")
+end)
+
+addTarget(flappyButton, "tap", function()
+	return storeRoot.Visible and not appScreen.Visible and not dead
+end, function()
+	downloadApp("Flappy Bird")
+end)
+
 storeClose.Activated:Connect(function() storeRoot.Visible = false end)
 appScreenBack.Activated:Connect(function()
 	appScreen.Visible = false
@@ -1474,4 +1530,3 @@ model.Destroying:Connect(function()
 		restoreCamera()
 	end
 end)
-
