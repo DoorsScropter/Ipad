@@ -487,22 +487,30 @@ local appScreenBack = ui("TextButton", {
 }, appScreen)
 corner(appScreenBack, UDim.new(0, 18))
 
--- Close tablet button stays at the top-left so it doesn't collide with Wi-Fi/battery.
-local tabletClose = ui("TextButton", {
-	Name = "CloseTablet",
-	Size = UDim2.fromOffset(42, 42),
-	Position = UDim2.fromOffset(10, 8),
-	BackgroundColor3 = Color3.fromRGB(20, 20, 26),
-	BackgroundTransparency = 0.18,
+-- iPad-style home indicator. When an app is open, tapping this bottom area
+-- exits the app to the home screen. The hit target is intentionally larger
+-- than the visible white bar for easier mobile tapping.
+local homeIndicator = ui("Frame", {
+	Name = "AppHomeIndicator",
+	Size = UDim2.fromOffset(176, 7),
+	Position = UDim2.fromOffset(CW / 2 - 88, CH - 30),
+	BackgroundColor3 = WHITE,
+	BackgroundTransparency = 0.15,
 	BorderSizePixel = 0,
-	Text = "⏻",
-	TextColor3 = WHITE,
-	TextSize = 25,
-	Font = Enum.Font.GothamBold,
-	AutoButtonColor = false,
-	ZIndex = 110,
+	Visible = false,
+	ZIndex = 120,
 }, sg)
-corner(tabletClose, UDim.new(1, 0))
+corner(homeIndicator, UDim.new(1, 0))
+
+local homeIndicatorHit = ui("Frame", {
+	Name = "AppHomeIndicatorHit",
+	Size = UDim2.fromOffset(300, 84),
+	Position = UDim2.fromOffset(CW / 2 - 150, CH - 82),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	Visible = false,
+	ZIndex = 121,
+}, sg)
 
 local function pressIcon(on)
 	TweenService:Create(
@@ -1074,11 +1082,26 @@ addTarget(netRow, "tap", function()
 	return ccActiveWifi() and wifiOn and wifiState ~= "scanning"
 end, tapNetwork)
 
+local function updateHomeIndicator()
+	local appOpen = storeRoot.Visible or appScreen.Visible
+	homeIndicator.Visible = appOpen
+	homeIndicatorHit.Visible = appOpen
+end
+
+local function returnToHome()
+	storeRoot.Visible = false
+	appScreen.Visible = false
+	ccTarget, ccP, ccDragging = 0, 0, false
+	updateHomeIndicator()
+end
+
 addTarget(iconHit, "tap", function()
 	return not locked and ccTarget == 0 and ccP < 0.05 and not dead and not storeRoot.Visible and not appScreen.Visible
 end, function()
 	storeRoot.Visible = true
+	appScreen.Visible = false
 	storeHint.Text = wifiState == "connected" and "Connected to " .. WIFI_NAME or "Connect to Wi-Fi to download apps."
+	updateHomeIndicator()
 end, pressIcon)
 
 local function refreshStore()
@@ -1104,6 +1127,7 @@ local function downloadApp(name)
 	if installedApps[name] then
 		storeRoot.Visible = false
 		appScreen.Visible = true
+		updateHomeIndicator()
 		appScreenTitle.Text = name
 		appScreenMessage.Text = name == "Flappy Bird"
 			and "Flappy Bird demo\\n\\nTap the screen to flap. This is a local UI demo, not the original game."
@@ -1134,18 +1158,13 @@ flappyButton.Activated:Connect(function() downloadApp("Flappy Bird") end)
 addTarget(storeClose, "tap", function()
 	return storeRoot.Visible and not appScreen.Visible and not dead
 end, function()
-	storeRoot.Visible = false
+	returnToHome()
 end)
 
-addTarget(tabletClose, "tap", function()
-	return not dead
+addTarget(homeIndicatorHit, "tap", function()
+	return (storeRoot.Visible or appScreen.Visible) and not dead
 end, function()
-	model.Parent = nil
-	reopenButton.Visible = true
-	storeRoot.Visible = false
-	appScreen.Visible = false
-	ccTarget, ccP, ccDragging = 0, 0, false
-	if mode then mode = nil restoreCamera() end
+	returnToHome()
 end)
 
 addTarget(appScreenBack, "tap", function()
@@ -1154,6 +1173,7 @@ end, function()
 	appScreen.Visible = false
 	storeRoot.Visible = true
 	refreshStore()
+	updateHomeIndicator()
 end)
 
 addTarget(robloxButton, "tap", function()
@@ -1168,20 +1188,12 @@ end, function()
 	downloadApp("Flappy Bird")
 end)
 
-storeClose.Activated:Connect(function() storeRoot.Visible = false end)
+storeClose.Activated:Connect(function() returnToHome() end)
 appScreenBack.Activated:Connect(function()
 	appScreen.Visible = false
 	storeRoot.Visible = true
 	refreshStore()
-end)
-tabletClose.Activated:Connect(function()
-	-- Hide the tablet model; the small reopen control remains on the player's HUD.
-	model.Parent = nil
-	reopenButton.Visible = true
-	storeRoot.Visible = false
-	appScreen.Visible = false
-	ccTarget, ccP, ccDragging = 0, 0, false
-	if mode then mode = nil restoreCamera() end
+	updateHomeIndicator()
 end)
 
 -- ===== SPRING (tap push-back) =====
@@ -1350,6 +1362,19 @@ local function handleInputBegan(input)
 	freezeCamera()
 
 	if not onScreen then
+		-- Physical top/power button: hide the whole iPad, then use Open iPad to restore it.
+		local nearTopPowerButton =
+			lp.Y > SH / 2 and lp.Y < BH / 2 + TILT_MARGIN
+			and lp.X > (BW / 2 - 1.0 * K) and lp.X < (BW / 2 - 0.2 * K)
+		if nearTopPowerButton then
+			model.Parent = nil
+			reopenButton.Visible = true
+			returnToHome()
+			mode = nil
+			restoreCamera()
+			return
+		end
+
 		-- Touching the right edge near the physical volume buttons changes volume.
 		local nearRightEdge = lp.X > SW / 2 and lp.X < BW / 2 + TILT_MARGIN
 		if nearRightEdge and math.abs(lp.Y) < BH / 2 then
@@ -1408,6 +1433,20 @@ local function handleInputBegan(input)
 		lastDy = 0
 		if slideTween then slideTween:Cancel() end
 	else
+		-- A broad bottom swipe/tap region acts like the iPad home indicator while
+		-- the App Store or a simulated app is open.
+		if (storeRoot.Visible or appScreen.Visible) and cy >= CH - 82 and math.abs(cx - CW / 2) <= 150 then
+			curTarget = nil
+			mode = "cctap"
+			curTarget = {
+				obj = homeIndicatorHit,
+				kind = "tap",
+				fn = returnToHome,
+				active = function() return (storeRoot.Visible or appScreen.Visible) and not dead end,
+			}
+			return
+		end
+
 		local tgt = findTarget(cx, cy)
 		if tgt then
 			curTarget = tgt
